@@ -1,18 +1,14 @@
-// const express = require('express');
-// const router = express.Router();
-
-// const {getProfile}=require('../controllers/ProfileController');
-
-// router.get('/:email', getProfile);
-
-// module.exports = router;
-// //
 
 const express = require('express');
 const router = express.Router();
-const { getProfile } = require('../controllers/ProfileController');
+const { getStudentProfile, getWardenProfile } = require('../controllers/ProfileController');
 const { verifyToken } = require('../middleware/authMiddleware');
 
-router.get('/', verifyToken, getProfile);
-
+router.get('/student/:studentId', verifyToken, getStudentProfile);
+router.get('/warden/:wardenId', verifyToken, getWardenProfile);
 module.exports = router;
+
+
+
+
+

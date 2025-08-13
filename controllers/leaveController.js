@@ -1,40 +1,41 @@
 const db = require('../db');
 
 exports.applyLeave = (req, res) => {
-  const {
-    email,
-    leaveType,
-    fromDate,
-    toDate,
-    fromTime,
-    toTime,
-    reason
-  } = req.body;
+  const { studentId } = req.params;
+  const { leaveType, fromDate, toDate, reason } = req.body;
 
-  const sql = `
-    INSERT INTO leaves
-    (student_id, leave_type, from_date, to_date, from_time, to_time, reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `;
+  // Step 1: Get the warden_id from the students table
+  const getWardenSql = `SELECT warden_id FROM students WHERE student_id = ?`;
 
-  db.query(sql, [
-    email,
-    leaveType,
-    fromDate,
-    toDate,
-    fromTime,
-    toTime,
-    reason
-  ], (err) => {
+  db.query(getWardenSql, [studentId], (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.status(200).json({ message: "Leave applied successfully" });
+
+    if (result.length === 0) {
+      return res.status(404).json({ error: "Student not found" });
+    }
+
+    const wardenId = result[0].warden_id;
+
+    // Step 2: Insert the leave request with the fetched warden_id
+    const insertLeaveSql = `
+      INSERT INTO leave_requests
+      (student_id, warden_id, from_date, to_date, reason, leave_type)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+
+    db.query(insertLeaveSql, [studentId, wardenId, fromDate, toDate, reason, leaveType], (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.status(200).json({ message: "Leave applied successfully" });
+    });
   });
 };
 
+
+// Get Leaves by Student To show in Student Page
 exports.getLeavesByStudent = (req, res) => {
   const { studentId } = req.params;
 
-  const sql = `SELECT * FROM leaves WHERE student_id = ? ORDER BY created_at DESC`;
+  const sql = `SELECT * FROM leave_requests WHERE student_id = ? ORDER BY created_at DESC LIMIT 10`; //here you can change how many past leaves to show 
 
   db.query(sql, [studentId], (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -42,131 +43,37 @@ exports.getLeavesByStudent = (req, res) => {
   });
 };
 
+// Get All Leaves For (Warden View)
+exports.getAllLeaves = (req, res) => {
+  const sql = `SELECT * FROM leave_requests ORDER BY created_at DESC AND status = 'pending'`; // Fetch all pending leave requests
 
-exports.updateWardenApproval = (req, res) => {
-  const { leaveId } = req.params;
-  const { status } = req.body;
-
-  const sql = `UPDATE leaves SET warden_approval = ? WHERE id = ?`;
-
-  db.query(sql, [status, leaveId], (err) => {
+  db.query(sql, (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.status(200).json({ message: "Warden approval updated" });
+    res.status(200).json(results);
   });
 };
 
+// Update Warden Approval (Change Status)
+exports.updateWardenApproval = (req, res) => {
+  const { leaveId } = req.params;
+  const { status } = req.body; 
 
+  const sql = `UPDATE leave_requests SET status = ? WHERE id = ?`;
 
+  db.query(sql, [status, leaveId], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.status(200).json({ message: "Leave status updated" });
+  });
+};
 
+// Delete Leave Request
+exports.deleteLeave = (req, res) => {
+  const { leaveId } = req.params;
 
+  const sql = `DELETE FROM leave_requests WHERE id = ? AND status = 'pending'`;
 
-// // controllers/leaveController.js
-// const leaveController = {
-//   // Get all leave applications
-//   getAllLeaves: (req, res) => {
-//     const query = `
-//       SELECT l.*, s.name as student_name, s.student_id
-//       FROM leave_applications l
-//       LEFT JOIN students s ON l.student_id = s.id
-//       ORDER BY l.created_at DESC
-//     `;
-    
-//     req.db.query(query, (err, results) => {
-//       if (err) {
-//         console.error('Error fetching leave applications:', err);
-//         return res.status(500).json({ error: 'Failed to fetch leave applications' });
-//       }
-//       res.json(results);
-//     });
-//   },
-
-//   // Get leave by ID
-//   getLeaveById: (req, res) => {
-//     const leaveId = req.params.id;
-//     const query = `
-//       SELECT l.*, s.name as student_name, s.student_id
-//       FROM leave_applications l
-//       LEFT JOIN students s ON l.student_id = s.id
-//       WHERE l.id = ?
-//     `;
-    
-//     req.db.query(query, [leaveId], (err, results) => {
-//       if (err) {
-//         console.error('Error fetching leave application:', err);
-//         return res.status(500).json({ error: 'Failed to fetch leave application' });
-//       }
-      
-//       if (results.length === 0) {
-//         return res.status(404).json({ error: 'Leave application not found' });
-//       }
-      
-//       res.json(results[0]);
-//     });
-//   },
-
-//   // Create new leave application
-//   createLeave: (req, res) => {
-//     const { student_id, leave_type, start_date, end_date, reason, emergency_contact } = req.body;
-    
-//     const query = `
-//       INSERT INTO leave_applications (student_id, leave_type, start_date, end_date, reason, emergency_contact, status)
-//       VALUES (?, ?, ?, ?, ?, ?, 'pending')
-//     `;
-    
-//     req.db.query(query, [student_id, leave_type, start_date, end_date, reason, emergency_contact], (err, result) => {
-//       if (err) {
-//         console.error('Error creating leave application:', err);
-//         return res.status(500).json({ error: 'Failed to create leave application' });
-//       }
-      
-//       res.status(201).json({
-//         message: 'Leave application created successfully',
-//         leaveId: result.insertId
-//       });
-//     });
-//   },
-
-//   // Update leave status
-//   updateLeaveStatus: (req, res) => {
-//     const leaveId = req.params.id;
-//     const { status, admin_remarks } = req.body;
-    
-//     const query = `
-//       UPDATE leave_applications 
-//       SET status = ?, admin_remarks = ?, updated_at = NOW()
-//       WHERE id = ?
-//     `;
-    
-//     req.db.query(query, [status, admin_remarks, leaveId], (err, result) => {
-//       if (err) {
-//         console.error('Error updating leave application:', err);
-//         return res.status(500).json({ error: 'Failed to update leave application' });
-//       }
-      
-//       if (result.affectedRows === 0) {
-//         return res.status(404).json({ error: 'Leave application not found' });
-//       }
-      
-//       res.json({ message: 'Leave application updated successfully' });
-//     });
-//   },
-
-//   // Get leaves by student ID
-//   getLeavesByStudent: (req, res) => {
-//     const studentId = req.params.studentId;
-//     const query = `
-//       SELECT * FROM leave_applications 
-//       WHERE student_id = ? 
-//       ORDER BY created_at DESC
-//     `;
-    
-//     req.db.query(query, [studentId], (err, results) => {
-//       if (err) {
-//         console.error('Error fetching student leaves:', err);
-//         return res.status(500).json({ error: 'Failed to fetch leave applications' });
-//       }
-      
-//       res.json(results);
-//     });
-//   }
-// };
+  db.query(sql, [leaveId], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.status(200).json({ message: "Leave request deleted" });
+  });
+};

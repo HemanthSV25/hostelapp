@@ -3,8 +3,8 @@ const pool = require('../db');
 // Apply for leave
 exports.applyLeave = async (req, res) => {
   try {
+    const {wardenId}=req.params;
     const {
-      email,
       leavetype,
       from_date,
       to_date,
@@ -15,8 +15,8 @@ exports.applyLeave = async (req, res) => {
 
     // Get warden_id from email
     const [wardenRows] = await pool.query(
-      'SELECT warden_id FROM warden WHERE email = ?',
-      [email]
+      'SELECT warden_id FROM warden WHERE warden_id = ?',
+      [wardenId]
     );
     if (!wardenRows.length)
       return res.status(404).json({ message: 'Warden not found' });
